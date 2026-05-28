@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: dockerforge
+    runtime: docker
+    plan: free
+    envVars:
+      - key: GEMINI_API_KEY
+        placeholder: "Enter your Gemini API key here"
+      - key: PORT
+        value: "8000"
