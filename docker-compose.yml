@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  dockerforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dockerforge-app
+    ports:
+      - "8000:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Mount the host Docker socket so the container can execute docker commands on the host daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
