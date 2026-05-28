@@ -617,3 +617,154 @@ header {
   color: var(--text-dimmed);
   border-top: 1px solid var(--border-color);
 }
+
+/* ============================
+   ENHANCED UI — v2 Additions
+   ============================ */
+
+/* macOS Terminal Chrome */
+.terminal-chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transition: filter var(--transition-fast);
+}
+
+.terminal-dot:hover {
+  filter: brightness(1.3);
+}
+
+.terminal-dot.red { background: #ff5f57; }
+.terminal-dot.yellow { background: #ffbd2e; }
+.terminal-dot.green { background: #28c840; }
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-dimmed);
+  font-family: var(--font-mono);
+}
+
+/* Code Syntax Highlighting */
+.code-line {
+  display: flex;
+  line-height: 1.7;
+}
+
+.code-line:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.line-number {
+  display: inline-block;
+  min-width: 2.5rem;
+  text-align: right;
+  padding-right: 1rem;
+  color: rgba(255, 255, 255, 0.15);
+  user-select: none;
+  font-size: 0.8rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  margin-right: 0.75rem;
+}
+
+.line-content {
+  flex: 1;
+}
+
+.syntax-keyword {
+  color: #ff7b72;
+  font-weight: 600;
+}
+
+.syntax-string {
+  color: #a5d6ff;
+}
+
+.syntax-comment {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.syntax-flag {
+  color: #d2a8ff;
+}
+
+/* Stats Summary Card */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.stat-card {
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: all var(--transition-fast);
+}
+
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-color-hover);
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dimmed);
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.stat-value.success { color: var(--color-success); }
+.stat-value.error { color: var(--color-error); }
+.stat-value.info { color: var(--color-info); }
+
+/* Fade-in animation for log lines */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.terminal-line {
+  animation: fadeInUp 0.2s ease forwards;
+}
+
+/* Divider */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 0.5rem 0;
+}
+

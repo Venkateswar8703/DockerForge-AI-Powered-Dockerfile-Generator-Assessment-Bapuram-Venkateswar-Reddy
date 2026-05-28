@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Play, 
-  Terminal, 
-  Code, 
   Copy, 
   Download, 
   Check, 
@@ -12,7 +10,12 @@ import {
   RefreshCw, 
   Sliders, 
   Key,
-  HelpCircle
+  HelpCircle,
+  Trash2,
+  Clock,
+  Box,
+  Layers,
+  Activity
 } from 'lucide-react';
 
 interface LogLine {
@@ -36,6 +39,60 @@ const DEFAULT_STEPS: AgentStep[] = [
   { id: 'run', title: 'Container Verification', desc: 'Running and pinging health check endpoints', status: 'pending' },
 ];
 
+const DOCKERFILE_KEYWORDS = ['FROM', 'RUN', 'COPY', 'ADD', 'WORKDIR', 'EXPOSE', 'CMD', 'ENTRYPOINT', 'ENV', 'ARG', 'LABEL', 'VOLUME', 'USER', 'HEALTHCHECK', 'SHELL', 'STOPSIGNAL', 'ONBUILD', 'MAINTAINER', 'AS'];
+
+function highlightDockerfile(code: string) {
+  return code.split('\n').map((line, idx) => {
+    let content: React.JSX.Element;
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('#')) {
+      content = <span className="syntax-comment">{line}</span>;
+    } else {
+      const parts: React.JSX.Element[] = [];
+      let remaining = line;
+      let matched = false;
+      
+      for (const kw of DOCKERFILE_KEYWORDS) {
+        if (trimmed.startsWith(kw + ' ') || trimmed === kw) {
+          const kwIndex = line.indexOf(kw);
+          if (kwIndex >= 0) {
+            parts.push(<span key="pre">{line.substring(0, kwIndex)}</span>);
+            parts.push(<span key="kw" className="syntax-keyword">{kw}</span>);
+            remaining = line.substring(kwIndex + kw.length);
+            matched = true;
+            break;
+          }
+        }
+      }
+      
+      if (matched) {
+        // Highlight strings in quotes and flags
+        const tokens = remaining.split(/("[^"]*"|'[^']*'|--[a-zA-Z0-9-]+)/g);
+        tokens.forEach((token, ti) => {
+          if (token.startsWith('"') || token.startsWith("'")) {
+            parts.push(<span key={`s${ti}`} className="syntax-string">{token}</span>);
+          } else if (token.startsWith('--')) {
+            parts.push(<span key={`f${ti}`} className="syntax-flag">{token}</span>);
+          } else {
+            parts.push(<span key={`t${ti}`}>{token}</span>);
+          }
+        });
+        content = <>{parts}</>;
+      } else {
+        content = <span>{line}</span>;
+      }
+    }
+    
+    return (
+      <div key={idx} className="code-line">
+        <span className="line-number">{idx + 1}</span>
+        <span className="line-content">{content}</span>
+      </div>
+    );
+  });
+}
+
 export default function App() {
   const [repoUrl, setRepoUrl] = useState('https://github.com/heroku/node-js-getting-started');
   const [apiKey, setApiKey] = useState('');
@@ -53,6 +110,12 @@ export default function App() {
   const [dockerCompose, setDockerCompose] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'dockerfile' | 'docker-compose'>('dockerfile');
   const [copied, setCopied] = useState(false);
+  
+  // Stats
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [buildAttempts, setBuildAttempts] = useState(0);
+  const [projectType, setProjectType] = useState<string>('-');
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -64,17 +127,36 @@ export default function App() {
     }
   }, [logs]);
 
-  const addLog = (type: LogLine['type'], text: string) => {
+  // Elapsed time ticker
+  useEffect(() => {
+    if (!isRunning || !startTime) return;
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isRunning, startTime]);
+
+  const addLog = useCallback((type: LogLine['type'], text: string) => {
     const time = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, { time, type, text }]);
-  };
+    
+    // Track build attempts from log messages
+    if (text.includes('Starting build verification (Attempt')) {
+      const match = text.match(/Attempt (\d+)/);
+      if (match) setBuildAttempts(parseInt(match[1]));
+    }
+    // Track project type
+    if (text.includes('Detected project type:')) {
+      const match = text.match(/type: (\w+)/);
+      if (match) setProjectType(match[1]);
+    }
+  }, []);
 
-  const updateStep = (id: string, status: AgentStep['status']) => {
+  const updateStep = useCallback((id: string, status: AgentStep['status']) => {
     setSteps(prev => prev.map(step => {
       if (step.id === id) {
         return { ...step, status };
       }
-      // If we start a step, make sure preceding steps are marked success if they are pending/active
       if (status === 'active' && prev.indexOf(step) < prev.findIndex(s => s.id === id)) {
         if (step.status !== 'success') {
           return { ...step, status: 'success' };
@@ -82,7 +164,7 @@ export default function App() {
       }
       return step;
     }));
-  };
+  }, []);
 
   const handleCopy = () => {
     const content = activeTab === 'dockerfile' ? dockerfile : dockerCompose;
@@ -117,18 +199,20 @@ export default function App() {
     setDockerfile('');
     setDockerCompose('');
     setSteps(DEFAULT_STEPS.map(s => ({ ...s, status: 'pending' })));
+    setBuildAttempts(0);
+    setProjectType('-');
+    setStartTime(Date.now());
+    setElapsed(0);
     setLogs([
       { time: new Date().toLocaleTimeString(), type: 'info', text: `Initiating connection... Mode: ${executionMode.toUpperCase()}` },
       { time: new Date().toLocaleTimeString(), type: 'agent', text: `Targeting: ${repoUrl}` }
     ]);
 
-    // Close any previous stream
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
 
     try {
-      // Step 1: Request backend to start process and return task ID
       const response = await fetch('/api/forge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,7 +232,6 @@ export default function App() {
       const { task_id } = await response.json();
       addLog('info', `Backend session task created: ${task_id}`);
 
-      // Step 2: Establish SSE connection to stream logs and outputs
       const eventSource = new EventSource(`/api/stream/${task_id}`);
       eventSourceRef.current = eventSource;
 
@@ -166,7 +249,6 @@ export default function App() {
             setDockerfile(data.dockerfile || '');
             setDockerCompose(data.docker_compose || '');
             setRunStatus('success');
-            // Mark all steps completed successfully
             setSteps(prev => prev.map(s => ({ ...s, status: 'success' })));
           } else {
             setRunStatus('failed');
@@ -183,11 +265,18 @@ export default function App() {
         eventSource.close();
       };
 
-    } catch (err: any) {
-      addLog('error', `Initialization Error: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      addLog('error', `Initialization Error: ${message}`);
       setRunStatus('failed');
       setIsRunning(false);
     }
+  };
+
+  const formatElapsed = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
   };
 
   return (
@@ -204,6 +293,11 @@ export default function App() {
             {runStatus === 'success' && <span className="status-badge success">Success</span>}
             {runStatus === 'failed' && <span className="status-badge failed">Build Failed</span>}
           </div>
+          {isRunning && (
+            <span style={{ color: 'var(--color-info)', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Clock size={14} /> {formatElapsed(elapsed)}
+            </span>
+          )}
           <span style={{ color: 'var(--text-dimmed)' }}>|</span>
           <span style={{ color: 'var(--text-muted)' }}>Gemini Agentic Builder</span>
         </div>
@@ -277,10 +371,10 @@ export default function App() {
                 <select
                   className="form-select"
                   value={simulationBehavior}
-                  onChange={(e) => setSimulationBehavior(e.target.value as any)}
+                  onChange={(e) => setSimulationBehavior(e.target.value as 'fail-and-fix' | 'always-success' | 'permanent-fail')}
                   disabled={isRunning}
                 >
-                  <option value="fail-and-fix">Self-Correction Loop (Fail & Fix)</option>
+                  <option value="fail-and-fix">Self-Correction Loop (Fail &amp; Fix)</option>
                   <option value="always-success">Build Directly (Success)</option>
                   <option value="permanent-fail">Critical Issues (Max Fails)</option>
                 </select>
@@ -299,7 +393,32 @@ export default function App() {
               )}
             </button>
 
-            <hr style={{ borderColor: 'var(--border-color)', margin: '0.5rem 0' }} />
+            <hr className="section-divider" />
+
+            {/* Stats Summary */}
+            <div className="form-group">
+              <label className="form-label">Run Statistics</label>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <span className="stat-label">Project Type</span>
+                  <span className="stat-value info">{projectType}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">Build Attempts</span>
+                  <span className={`stat-value ${buildAttempts > 1 ? 'error' : buildAttempts === 1 ? 'info' : ''}`}>{buildAttempts || '-'}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">Status</span>
+                  <span className={`stat-value ${runStatus === 'success' ? 'success' : runStatus === 'failed' ? 'error' : 'info'}`}>{runStatus.toUpperCase()}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">Duration</span>
+                  <span className="stat-value">{elapsed > 0 ? formatElapsed(elapsed) : '-'}</span>
+                </div>
+              </div>
+            </div>
+
+            <hr className="section-divider" />
 
             {/* Agent Steps Timeline */}
             <div className="form-group">
@@ -332,10 +451,21 @@ export default function App() {
           <div className="output-panels">
             {/* Terminal Live logs */}
             <div className="glass-panel">
-              <div className="panel-header">
-                <span className="panel-title">
-                  <Terminal size={18} /> Agent Thoughts & Build Logs
-                </span>
+              <div className="terminal-chrome">
+                <div className="terminal-dots">
+                  <div className="terminal-dot red" />
+                  <div className="terminal-dot yellow" />
+                  <div className="terminal-dot green" />
+                </div>
+                <span className="terminal-title">dockerforge — agent logs</span>
+                <button 
+                  className="action-btn" 
+                  title="Clear logs" 
+                  onClick={() => setLogs([{ time: new Date().toLocaleTimeString(), type: 'info', text: 'Logs cleared.' }])}
+                  style={{ marginLeft: 'auto' }}
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
               <div className="terminal-wrapper">
                 {logs.map((log, idx) => (
@@ -387,10 +517,10 @@ export default function App() {
               <div className="code-wrapper">
                 {activeTab === 'dockerfile' ? (
                   dockerfile ? (
-                    <pre className="code-pre"><code>{dockerfile}</code></pre>
+                    <pre className="code-pre">{highlightDockerfile(dockerfile)}</pre>
                   ) : (
                     <div className="empty-state">
-                      <Code size={40} />
+                      <Box size={40} />
                       <p>Dockerfile will appear here once forged by the Agent</p>
                     </div>
                   )
@@ -399,8 +529,8 @@ export default function App() {
                     <pre className="code-pre"><code>{dockerCompose}</code></pre>
                   ) : (
                     <div className="empty-state">
-                      <Code size={40} />
-                      <p>docker-compose.yml will appear here if requested/generated</p>
+                      <Layers size={40} />
+                      <p>docker-compose.yml will appear here if generated</p>
                     </div>
                   )
                 )}
@@ -408,6 +538,7 @@ export default function App() {
             </div>
           </div>
           <div className="footer">
+            <Activity size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.35rem' }} />
             DockerForge — Built with FastAPI, React, and Google Gemini Agentic Reasoning Loop
           </div>
         </div>
