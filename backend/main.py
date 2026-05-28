@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 import asyncio
 import threading
 import logging
@@ -256,7 +257,7 @@ async def stream_task_logs(task_id: str):
             while True:
                 # Wait for next item in queue
                 item = await queue.get()
-                yield f"data: {asyncio.json.dumps(item)}\n\n"
+                yield f"data: {json.dumps(item)}\n\n"
                 queue.task_done()
                 
                 # If this is the final result, clean up the queue
