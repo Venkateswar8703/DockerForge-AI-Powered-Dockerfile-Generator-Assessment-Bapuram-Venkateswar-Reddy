@@ -225,13 +225,13 @@ def run_agent_loop(
         send_result("failed")
 
 @app.post("/api/forge")
-def forge_dockerfile(request: ForgeRequest, background_tasks: BackgroundTasks):
+async def forge_dockerfile(request: ForgeRequest, background_tasks: BackgroundTasks):
     """Launches the Dockerforge agentic run."""
     task_id = str(uuid.uuid4())
     task_queues[task_id] = asyncio.Queue()
     
     # Get current event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     
     # Run in a background thread so the HTTP response is immediate
     thread = threading.Thread(
