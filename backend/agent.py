@@ -117,7 +117,7 @@ def get_mock_dockerfile(project_type: str, attempt: int, behavior: str) -> Dict[
                 "EXPOSE 3000\n"
                 "CMD [\"npm\", \"start\"]\n"
             )
-            rationale = "Corrected NodeJS Dockerfile. Changed npm ci to npm install --legacy-peer-deps to handle dependency tree conflicts."
+            rationale = "Corrected NodeJS Dockerfile. Changed npm ci to npm install --legacy-peer-deps to resolve the ejs/express-ejs-layouts peer dependency conflict."
             
         docker_compose = (
             "version: '3.8'\n"
