@@ -37,7 +37,7 @@ const DEFAULT_STEPS: AgentStep[] = [
 ];
 
 export default function App() {
-  const [repoUrl, setRepoUrl] = useState('https://github.com/expressjs/express-starter');
+  const [repoUrl, setRepoUrl] = useState('https://github.com/heroku/node-js-getting-started');
   const [apiKey, setApiKey] = useState('');
   const [executionMode, setExecutionMode] = useState<'real' | 'simulated'>('simulated');
   const [simulationBehavior, setSimulationBehavior] = useState<'fail-and-fix' | 'always-success' | 'permanent-fail'>('fail-and-fix');
